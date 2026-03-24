@@ -134,33 +134,95 @@ async def send_message_to_ads(city_url, city_name):
                     await new_page.goto(ad_url, wait_until="domcontentloaded", timeout=40000)
                     await new_page.wait_for_timeout(random.randint(2000, 4000))
 
-                    # Ищем кнопку "Написать"
-                    btn = new_page.locator('button[data-marker="messenger-button"]')
-                    if await btn.is_visible(timeout=5000):
+                    # Ищем кнопку "Написать" — пробуем несколько селекторов
+                    # Авито периодически меняет data-marker
+                    MSG_BTN_SELECTORS = [
+                        'button[data-marker="messenger-button"]',
+                        'button[data-marker="contact-bar/write"]',
+                        'button[data-marker="item-contact/messenger"]',
+                        'button:has-text("Написать")',
+                        'a:has-text("Написать")',
+                        '[class*="messenger-button"]',
+                        '[class*="write-button"]',
+                    ]
+
+                    btn = None
+                    btn_selector_used = None
+                    for sel in MSG_BTN_SELECTORS:
+                        try:
+                            candidate = new_page.locator(sel).first
+                            if await candidate.is_visible(timeout=2000):
+                                btn = candidate
+                                btn_selector_used = sel
+                                break
+                        except:
+                            continue
+
+                    if btn:
+                        print(f"🔍 Кнопка найдена: {btn_selector_used}")
                         await btn.click()
                         await new_page.wait_for_timeout(random.randint(1500, 2500))
 
-                        # Вводим текст
-                        textarea = new_page.locator('textarea[data-marker="messenger-input"]')
-                        if await textarea.is_visible(timeout=5000):
+                        # Вводим текст — тоже пробуем несколько селекторов
+                        TEXTAREA_SELECTORS = [
+                            'textarea[data-marker="messenger-input"]',
+                            'textarea[data-marker="message-input"]',
+                            'textarea[placeholder*="сообщен"]',
+                            'textarea[placeholder*="Напишите"]',
+                            'div[contenteditable="true"]',
+                        ]
+                        textarea = None
+                        for sel in TEXTAREA_SELECTORS:
+                            try:
+                                candidate = new_page.locator(sel).first
+                                if await candidate.is_visible(timeout=2000):
+                                    textarea = candidate
+                                    break
+                            except:
+                                continue
+
+                        if textarea:
                             text = get_random_message(city_name)
-                            # Печатаем по символу как человек
                             await textarea.click()
                             await new_page.keyboard.type(text, delay=random.randint(30, 80))
                             await new_page.wait_for_timeout(random.randint(800, 1500))
 
                             # Отправляем
-                            submit_btn = new_page.locator('button[data-marker="messenger-submit"]')
-                            if await submit_btn.is_visible(timeout=3000):
-                                await submit_btn.click()
-                                print(f"✅ Отправили: «{text[:50]}...»")
+                            SUBMIT_SELECTORS = [
+                                'button[data-marker="messenger-submit"]',
+                                'button[data-marker="message-submit"]',
+                                'button:has-text("Отправить")',
+                                '[class*="submit"]',
+                            ]
+                            submitted = False
+                            for sel in SUBMIT_SELECTORS:
+                                try:
+                                    submit_btn = new_page.locator(sel).first
+                                    if await submit_btn.is_visible(timeout=2000):
+                                        await submit_btn.click()
+                                        print(f"✅ Отправили: «{text[:50]}...»")
+                                        sent_count += 1
+                                        submitted = True
+                                        break
+                                except:
+                                    continue
+                            if not submitted:
+                                # Пробуем Enter как запасной вариант
+                                await new_page.keyboard.press("Enter")
+                                print(f"✅ Отправили через Enter: «{text[:50]}...»")
                                 sent_count += 1
-                            else:
-                                print("❌ Кнопка отправки не найдена")
                         else:
                             print("❌ Поле ввода не открылось")
                     else:
-                        print("⏭️  Кнопки сообщения нет (только звонки?)")
+                        # Распечатаем все data-marker кнопки на странице для диагностики
+                        markers = await new_page.evaluate("""
+                            () => Array.from(document.querySelectorAll('button[data-marker], a[data-marker]'))
+                                      .map(el => el.getAttribute('data-marker') + ' | ' + el.innerText.trim().slice(0,30))
+                                      .slice(0, 20)
+                        """)
+                        print(f"⏭️  Кнопка сообщения не найдена. Кнопки на странице:")
+                        for m in markers:
+                            print(f"   → {m}")
 
                     await new_page.close()
 
