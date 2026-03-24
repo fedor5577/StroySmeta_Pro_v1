@@ -144,6 +144,8 @@ async def send_message_to_ads(city_url, city_name):
                 try:
                     print(f"\n📌 Открываем: {ad_url}")
                     new_page = await context.new_page()
+                    if STEALTH_AVAILABLE:
+                        await stealth_async(new_page)
                     await new_page.goto(ad_url, wait_until="domcontentloaded", timeout=40000)
                     await new_page.wait_for_timeout(random.randint(2000, 4000))
 
