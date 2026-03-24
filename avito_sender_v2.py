@@ -5,6 +5,14 @@ import os
 from playwright.async_api import async_playwright
 from avito_messages import get_random_message
 
+# pip install playwright-stealth
+try:
+    from playwright_stealth import stealth_async
+    STEALTH_AVAILABLE = True
+except ImportError:
+    STEALTH_AVAILABLE = False
+    print("⚠️  playwright-stealth не установлен. Запусти: pip install playwright-stealth")
+
 # =====================================================
 # КОНФИГУРАЦИЯ
 # =====================================================
@@ -101,6 +109,11 @@ async def send_message_to_ads(city_url, city_name):
 
         page = await context.new_page()
 
+        # Применяем stealth-патч если доступен
+        if STEALTH_AVAILABLE:
+            await stealth_async(page)
+            print("🥷 Stealth режим активен")
+
         print(f"\n{'='*50}")
         print(f"🏙️  Город: {city_name}")
         print(f"🌐  UA: {user_agent[:60]}...")
@@ -160,6 +173,13 @@ async def send_message_to_ads(city_url, city_name):
 
                     if btn:
                         print(f"🔍 Кнопка найдена: {btn_selector_used}")
+                        # Двигаем мышь к кнопке как человек (случайное смещение)
+                        box = await btn.bounding_box()
+                        if box:
+                            x = box["x"] + box["width"] / 2 + random.randint(-5, 5)
+                            y = box["y"] + box["height"] / 2 + random.randint(-3, 3)
+                            await new_page.mouse.move(x, y, steps=random.randint(5, 15))
+                            await new_page.wait_for_timeout(random.randint(200, 600))
                         await btn.click()
                         await new_page.wait_for_timeout(random.randint(1500, 2500))
 
